@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mathvent Calendar</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --page-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+      --door-border: rgba(255, 255, 255, 0.8);
+      --door-border-hover: #ffffff;
+      --door-bg: rgba(0, 0, 0, 0.15);
+      --door-bg-hover: rgba(0, 0, 0, 0.35);
+      --transition-fast: 0.3s ease;
+      --transition-slow: 0.5s ease;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at top, #1c2541, #0b1020 55%, #020308);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+      animation: bodyFadeIn 1.2s ease both;
+    }
+
+    @keyframes bodyFadeIn {
+      from { opacity: 0; transform: scale(0.99); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+
+    .page {
+      position: relative;
+      width: min(90vw, 70vh * 210 / 297); /* A4 ratio on screen */
+      aspect-ratio: 210 / 297;
+      background-image: url("santa_math_comic.jpg"); /* your background */
+      background-size: cover;
+      background-position: center;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: var(--page-shadow);
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: stretch;
+      color: #fff;
+      backdrop-filter: blur(0.5px);
+    }
+
+    .header {
+      text-align: center;
+      padding-bottom: 0.5rem;
+      text-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .header h1 {
+      margin: 0.1rem 0 0.2rem;
+      font-size: clamp(1.2rem, 2.5vw, 1.6rem);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      grid-template-rows: repeat(4, 1fr);
+      gap: 0.35rem;
+      position: relative; /* important for overlay */
+    }
+
+    /* Each grid cell */
+    .door-slot {
+      position: relative;
+      perspective: 800px; /* for 3D flap */
+      background: transparent;
+    }
+
+    /* When a door is active, make the whole cell white */
+    .door-slot.active {
+      background: #ffffff;
+    }
+
+    /* The flap itself */
+    .door {
+      position: absolute;
+      inset: 0;
+      border: 2px solid var(--door-border);
+      border-radius: 4px;
+      background: var(--door-bg);
+      cursor: pointer;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition:
+        transform var(--transition-slow),
+        box-shadow var(--transition-slow),
+        border-color var(--transition-fast),
+        background var(--transition-fast),
+        opacity 0.25s ease;
+      backdrop-filter: blur(1px);
+      transform-style: preserve-3d;
+      transform-origin: left center; /* default hinge on left */
+      z-index: 2; /* flap above text */
+    }
+
+    .door.hinge-right {
+      transform-origin: right center;
+    }
+
+    .door:hover {
+      border-color: var(--door-border-hover);
+      background: var(--door-bg-hover);
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+    }
+
+    .door-number {
+      font-size: clamp(0.9rem, 2.2vw, 1.1rem);
+      font-weight: 700;
+      text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+      z-index: 1;
+      transition: opacity var(--transition-fast);
+    }
+
+    /* Flap open states (Advent-style) */
+    .door.open.hinge-left {
+      transform: rotateY(-120deg);
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.7);
+    }
+
+    .door.open.hinge-right {
+      transform: rotateY(120deg);
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.7);
+    }
+
+    .door.open .door-number {
+      opacity: 0;
+    }
+
+    /* Small box under the door: Christmas emoji */
+    .question-content {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.3rem 0.25rem;
+      text-align: center;
+      font-size: 1.1rem;
+      line-height: 1.3;
+      color: #000;
+      background: transparent;
+      z-index: 0;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .door-slot.active .question-content {
+      background: #ffffff;
+      border: none; /* pure white card under the door */
+    }
+
+    .emoji-behind {
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .door-slot.active .emoji-behind {
+      opacity: 1;
+    }
+
+    .close-question-small {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: rgba(0,0,0,0.65);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 10px;
+      height: 10px;
+      font-size: 6px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 3;
+    }
+    .door-slot.active .close-question-small {
+      display: flex;
+    }
+
+    /* FRONT PAGE STYLES */
+    .front-page {
+      position: fixed;
+      inset: 0;
+      background-image: url("School.jpg");
+      background-size: cover;
+      background-position: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      color: white;
+      text-align: center;
+    }
+
+    #start-button {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      padding: 0.8rem 1.8rem;
+      font-size: 1.1rem;
+      background: green;
+      color: #ffffff;
+      border: 2px solid #ffffff;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 700;
+      box-shadow: none;
+      transition:
+        transform 0.2s ease,
+        background 0.2s ease,
+        border-color 0.2s ease;
+    }
+    #start-button:hover {
+      transform: scale(1.05);
+      background: rgba(0, 0, 0, 0.25);
+      border-color: #ffffff;
+    }
+
+    /* 🔊 mute button on second page */
+    .mute-button {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      padding: 0.2rem 0.45rem;
+      font-size: 0.75rem;
+      background: rgba(0, 0, 0, 0.4);
+      color: #ffffff;
+      border: 2px solid #ffffff;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 700;
+      box-shadow: none;
+      transition:
+        transform 0.2s ease,
+        background 0.2s ease,
+        border-color 0.2s ease;
+      z-index: 10;
+    }
+
+    .mute-button:hover {
+      transform: scale(1.05);
+      background: rgba(0, 0, 0, 0.65);
+      border-color: #ffffff;
+    }
+
+    /* BIG QUESTION PANEL (position depends on row) */
+    .question-panel {
+      position: absolute;
+      left: 1rem;
+      right: 1rem;
+      background: #ffffff;
+      color: #000000;
+      border-radius: 12px;
+      border: 2px solid #dddddd;
+      padding: 1rem 1.2rem;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      z-index: 5;
+      overflow-y: auto;
+    }
+
+    /* lower part of calendar */
+    .question-panel.bottom-panel {
+      bottom: 1rem;
+      top: auto;
+    }
+
+    /* upper part of calendar */
+    .question-panel.top-panel {
+      top: 1rem;
+      bottom: auto;
+    }
+
+    .question-panel.active {
+      display: flex;
+    }
+
+    #question-panel-text {
+      font-size: clamp(0.8rem, 1.5vw, 1rem);
+      line-height: 1.5;
+      word-wrap: break-word;
+      word-break: break-word;
+      max-width: 100%;
+      white-space: pre-line;
+    }
+
+    #question-panel-close {
+      align-self: flex-end;
+      margin-bottom: 0.5rem;
+      background: rgba(0,0,0,0.75);
+      color: #ffffff;
+      border: none;
+      border-radius: 999px;
+      padding: 0.2rem 0.6rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    @media (max-width: 480px) {
+      .page {
+        padding: 0.7rem;
+      }
+      .grid {
+        gap: 0.25rem;
+      }
+      .question-panel {
+        left: 0.7rem;
+        right: 0.7rem;
+        padding: 0.7rem 0.8rem;
+      }
+      #question-panel-text {
+        font-size: 0.85rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- BACKGROUND MUSIC (started when pressing front-page button) -->
+  <audio id="bg-music" src="we-wish-you-a-merry-christmas-168945.mp3" loop></audio>
+
+  <!-- FRONT PAGE OVERLAY -->
+  <div class="front-page" id="front-page">
+    <button id="start-button">Enter Santa's school for smart elves</button>
+  </div>
+
+  <!-- MAIN CALENDAR PAGE -->
+  <div class="page" id="page">
+    <!-- 🔊 MUTE BUTTON ONLY ON SECOND PAGE -->
+    <button id="mute-button" class="mute-button">🔊</button>
+
+    <div class="header">
+      <h1>Mathvent Calendar</h1>
+    </div>
+
+    <div class="grid" id="grid">
+      <!-- 24 doors → each in a .door-slot (flap + emoji behind) -->
+
+      <div class="door-slot">
+        <div class="door" data-index="0">
+          <span class="door-number">7</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="7">
+          <span class="door-number">14</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="14">
+          <span class="door-number">22</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="22">
+          <span class="door-number">3</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="3">
+          <span class="door-number">18</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="18">
+          <span class="door-number">11</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="11">
+          <span class="door-number">1</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="1">
+          <span class="door-number">24</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="24">
+          <span class="door-number">6</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="6">
+          <span class="door-number">17</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="17">
+          <span class="door-number">9</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="9">
+          <span class="door-number">20</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="20">
+          <span class="door-number">13</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="13">
+          <span class="door-number">2</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="2">
+          <span class="door-number">15</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="15">
+          <span class="door-number">8</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="8">
+          <span class="door-number">4</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="4">
+          <span class="door-number">23</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="23">
+          <span class="door-number">5</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="5">
+          <span class="door-number">12</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="12">
+          <span class="door-number">19</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="19">
+          <span class="door-number">10</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="10">
+          <span class="door-number">21</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="21">
+          <span class="door-number">16</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- BIG QUESTION PANEL -->
+    <div id="question-panel" class="question-panel bottom-panel">
+      <button id="question-panel-close">✕ Close</button>
+      <div id="question-panel-text"></div>
+    </div>
+
+  </div>
+
+  <script>
+    // 👉 EDIT YOUR QUESTIONS HERE
+    const questions = [
+      "Santa is getting dressed in the dark, and his elves mixed up all his cozy Christmas socks. \n \nHe has 30 red socks, 20 white socks, and 10 blue socks. \n \nSanta reaches into the drawer without looking. \n \nHow many socks must he pull out to be absolutely sure he gets at least one matching Christmas pair?",
+      "Santa likes to get cozy and eat dinner by candlelight every evening. \n \nHe carefully saves all the candle ends, because whenever he has seven ends, he can melt them down to make one new candle. \n \nOne full candle burns for exactly one evening. \n \nOne day, Santa counts his supplies and finds he has 34 full candles and 50 candle ends. \n \nFor how many evenings can Santa enjoy a fully candlelit dinner before he has to get more candles?",
+      "The senior elf in Santa’s workshop is asked by a curious youngling how old he is. \n \nInstead of answering directly, he says: \n \n“I have six children, each born four years apart. \n \nI had my first child when I was 19. \n \nAnd now my youngest child is 19 as well. \n \nThat’s all I’m telling you!” \n \nHow old is the senior elf?",
+      "In Santa’s workshop, the elves baked 529 Christmas cookies. \n \nEach elf baked a number of cookies equal to the number of elves in the workshop. \n \nHow many elves have been baking cookies?",
+      "Santa wants the elves to confirm the exact number of presents he must deliver this Christmas.\n \nThe number is 10 digits long, and each digit tells how often a certain digit appears in the whole number: \n \nThe 1st digit counts the 0s, \n \nThe 2nd digit counts the 1s, \n \n… \n \nThe 10th digit counts the 9s. \n \nWhat is the number of presents Santa has to deliver?",
+      "Santa is testing how sturdy his new glass Christmas baubles are. \n \nHe has a 100-floor tower and two identical baubles. From some floors a bauble survives; from higher floors it shatters. Unbroken baubles can be reused. \n \nSanta must find the highest floor from which a bauble can be dropped without breaking. If both baubles break before he finds the answer, the Quality Control Elf will be furious. \n \nWhat is the minimum number of drops Santa needs to guarantee the answer in the worst case?",
+      "At the North Pole, one-third of the elves spend their days looking after the reindeer. Half of the remaining elves work in Santa’s workshop, making toys. The other 60 elves read and sort the letters sent by children around the world. \n \nHow many elves live at the North Pole altogether? ",
+      "Christmas morning! \n \nYour long-awaited present is sitting beneath the sparkling Christmas tree. \n \nYou pick it up, ready to open it, when… disaster strikes: The present is locked, and you need a combination to open it. \n \nYou find a note with clues: \n-The combination has four digits. \n-All digits are different. \n-It starts and ends with an odd number, with two even numbers in the middle. \n-It is divisible by 19 and also by 519. \n \nSolve it and enjoy your present! \n \n Thank you and Merry Christmas!",
+      "In the elves’ cantine, the milk tap fills the cauldron at 15 litres per minute, and the liquid chocolate tap adds 10 litres per minute. \n \nBut there is a leak in the cauldron that lets 12 litres per minute escape. \n \nThe cauldron can hold 520 litres in total. \nSanta turns on both taps to make hot chocolate but forgets to fix the leak. \nHe needs the cauldron to be full to have enough hot chocolate for all his elves. \n \nAfter how much time can he call them in?",
+      "Santa is sorting gifts in the workshop, and three crates stand before him. \nOne holds only candy canes, one only gingerbread cookies, and one holds both. \n \nBut the labeling elf has gone haywire, and now all the labels are wrong. \nOne reads “candy canes,” one “gingerbread,” and one “candy canes & gingerbread” — but none are correct. \n \nSanta only has time to take one treat from just one box. \n \nHow can he correctly relabel all three crates?",
+      "Rudolf has to pull Santa’s sleigh to all the houses around the world. \n \nBut he can only carry enough hay to keep his strength up for half the journey. \n \nLuckily, Rudolf isn’t the only reindeer at the North Pole. He asks some of the others to join him and share the hay they are carrying so that he can stay fed and complete his important tour. Each reindeer can also only carry enough hay for exactly half the journey, but they can transfer their hay to each other along the way. \n \nWhat is the minimum number of reindeer needed (including Rudolf) to make sure he can complete the whole journey?",
+      "Santa is sorting gifts in his workshop. \n \nHe has ten boxes of presents with a total weight of 75 kg: \n \n15 kg, 13 kg, 11 kg, 10 kg, 9 kg, 8 kg, 4 kg, 2 kg, 2 kg, and 1 kg. \n \nHe wants to load them into three of his bags, and each bag can carry a maximum of 25 kg. \n \nHow can Santa pack the boxes?",
+      "Santa has two identical mugs. \nOne holds 100 ml of hot chocolate, the other 100 ml of milk. \n \nHe takes a spoonful of hot chocolate and stirs it into the milk. \n \nThen he takes a spoonful of that mixture and stirs it back into the hot chocolate. \n \nWhich mug now contains less of the other’s liquid?",
+      "Seven bags of toys, each filled to two-thirds of their capacity, are prepared at the North Pole. When Santa reaches the last Mensa member, he has taken out a quarter of the toys from each bag. \n \nCan the remaining three-quarters of the toys be packed into just three bags?",
+      "Santa drives his sleigh halfway to the city at 30 km/h because the reindeer are still warming up. \n \nBut to keep up with his tight Christmas schedule, he needs an average speed of 60 km/h for the entire journey. \n \nHow fast does he need to go for the second half of the trip?",
+      "Santa's magic rectangular belt shrinks every time he fulfills a wish: each time, its length becomes 1/2 and its width becomes 1/3 of what it was before. \n \nAfter three fulfilled wishes, the belt’s surface area is now 4 cm². \n \nOriginally, the belt was 9 cm wide. \n \nWhat was the original length of Santa’s magic belt?",
+      "Santa has forgotten the code to his workshop safe.\n \nHe only remembers that the code is the 4th number in this sequence: \n \n24, 120, 720, ???? \n \nCan you help Santa?",
+      "Santa baked a big batch of cookies for Christmas morning and left them to cool overnight. \n \nDuring the night, one mischievous elf sneaked in, divided the cookies into four equal piles with one left over (which he ate), then ate one whole pile and went back to bed. \n \nLater that night, a hungry reindeer wandered in and did the same thing. \n \nIn the morning, a stunned Santa found only 60 cookies left. \n \nHow many cookies did he bake?",
+      "Santa leaves the North Pole at 15:00 on his sleigh, flying at 240 km/h. \n \nOne hour later, the elves notice he has forgotten to take the bag with the presents for the Mensa members who have all been very good this year. \n \nThey immediately take off on their own sleigh to bring the bag to him, racing at 360 km/h.\n \nWhen will the elves’ sleigh catch up to Santa’s?",
+      "Two elves and a reindeer are walking along a snowy path. \n \nThe first elf walks at 6 km/h, and just behind him the second elf walks at 5 km/h. \n \nThe reindeer trots back and forth between them at a constant 10 km/h, never slowing down when turning. \n \nHow far does the reindeer travel in one hour?",
+      "To prepare for Christmas, Mensa ordered a kit to make our own Christmas crackers. \n \nThe kit included: \nThree colours of hats: red, yellow, and blue \nFour types of novelties: toy car, spinning top, magnifying glass, and miniature hairbrush \nFour different joke slips \n \nWe have enough pieces to make 50 crackers, and no cracker may have any piece missing. \n \nCan we make every single cracker different from all the others?",
+      "Santa is almost ready to leave, but the elves insist he wait exactly 45 minutes so all children are asleep. \n \nHis watch has frozen, but in the workshop he finds Christmas cords that each burn for exactly one hour when lit at one end — though not at a steady rate. \n \nSanta has a lighter and as many cords as he needs. \n \nHow can he measure exactly 45 minutes so he knows when to take off?",
+      "To keep the elf population stable, elf families continue having children until they have a baby girl. \n \nAs soon as a girl is born, the family stops. \n \nOver many years, what will the ratio of elf boys to elf girls be at the North Pole? \n \n (The chances of getting a girl are 50%)",
+      "In Santa’s workshop, the elves are preparing the gift-weighing balance. \n \nEvery present weighs a whole number of kilograms, and has to be measure using only four magic weights. \n \nEach magic weight can change its value once before every section of the job (a, b and c). \n \nWith these four adjustable weights, the elves have to measure every present’s weight:\n \na) up to 15 kg \nb) up to 40 kg \nc) up to 80 kg"
+    ];
+
+    const page        = document.getElementById("page");
+    const doors       = document.querySelectorAll(".door");
+    const bgMusic     = document.getElementById("bg-music");
+    const frontPage   = document.getElementById("front-page");
+    const startButton = document.getElementById("start-button");
+    const muteButton  = document.getElementById("mute-button");
+
+    const questionPanel      = document.getElementById("question-panel");
+    const questionPanelText  = document.getElementById("question-panel-text");
+    const questionPanelClose = document.getElementById("question-panel-close");
+
+    let openDoor       = null;
+    let activeSlot     = null;
+    let isMuted        = false;
+    let panelTimeoutId = null;  // for delayed showing
+
+    // 🎄 Random Christmas emojis
+    const christmasEmojis = [
+      "🎄","🎁","⭐","❄️","⛄","🔔","🕯️","🍪","🧦","🦌","🎀","🍬"
+    ];
+
+    // Assign emojis behind doors + set hinge side
+    doors.forEach((door, index) => {
+      const slot = door.parentElement;
+      const emojiSpan = slot.querySelector(".emoji-behind");
+
+      if (emojiSpan) {
+        const dayText = slot.querySelector(".door-number")?.textContent.trim();
+        // Day 6 and Day 24 → always present emoji 🎁
+        if (dayText === "6" || dayText === "24") {
+          emojiSpan.textContent = "🎁";
+        } else {
+          const randomIcon = christmasEmojis[Math.floor(Math.random() * christmasEmojis.length)];
+          emojiSpan.textContent = randomIcon;
+        }
+      }
+
+      const col = index % 6;
+      if (col >= 3) door.classList.add("hinge-right");
+      else          door.classList.add("hinge-left");
+    });
+
+    // Door click → open flap, then (after delay) show big panel with question text
+    doors.forEach((door, index) => {
+      door.addEventListener("click", () => {
+        const slot = door.parentElement;
+
+        // Cancel any pending show
+        if (panelTimeoutId !== null) {
+          clearTimeout(panelTimeoutId);
+          panelTimeoutId = null;
+        }
+
+        // Close previous door/slot
+        if (openDoor && openDoor !== door) {
+          openDoor.classList.remove("open");
+        }
+        if (activeSlot && activeSlot !== slot) {
+          activeSlot.classList.remove("active");
+        }
+
+        openDoor   = door;
+        activeSlot = slot;
+
+        // Activate this cell & open the flap
+        slot.classList.add("active");
+        door.classList.add("open");
+
+        // Big panel question text from array
+        const fullText = questions[index] || ("Question " + (index + 1));
+        questionPanelText.textContent = fullText;
+
+        // Decide where to place the panel:
+        // rows 0–1 (upper half) → bottom; rows 2–3 (lower half) → top
+        const row = Math.floor(index / 6); // 0..3
+        questionPanel.classList.remove("top-panel", "bottom-panel");
+        if (row >= 2) {
+          // lower two rows → show question in upper part
+          questionPanel.classList.add("top-panel");
+        } else {
+          // upper two rows → show question in lower part
+          questionPanel.classList.add("bottom-panel");
+        }
+
+        // Delay so user sees the flap opening
+        panelTimeoutId = setTimeout(() => {
+          questionPanel.classList.add("active");
+          panelTimeoutId = null;
+        }, 300); // 300 ms delay
+      });
+    });
+
+    function closeQuestionPanel() {
+      // Hide the big panel
+      questionPanel.classList.remove("active");
+
+      // Cancel any pending show
+      if (panelTimeoutId !== null) {
+        clearTimeout(panelTimeoutId);
+        panelTimeoutId = null;
+      }
+
+      // Reset doors and slots
+      if (openDoor) {
+        openDoor.classList.remove("open");
+        openDoor = null;
+      }
+      if (activeSlot) {
+        activeSlot.classList.remove("active");
+        activeSlot = null;
+      }
+    }
+
+    // Big panel close
+    questionPanelClose.addEventListener("click", (event) => {
+      event.stopPropagation();
+      closeQuestionPanel();
+    });
+
+    // Small X under the door also closes everything
+    document.querySelectorAll(".close-question-small").forEach(btn => {
+      btn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        closeQuestionPanel();
+      });
+    });
+
+    // Start button: hide front page + start music
+    startButton.addEventListener("click", () => {
+      frontPage.style.display = "none";
+      if (bgMusic) {
+        bgMusic.play().catch(() => {});
+      }
+    });
+
+    // Mute button
+    muteButton.addEventListener("click", () => {
+      isMuted = !isMuted;
+      bgMusic.muted = isMuted;
+      muteButton.textContent = isMuted ? "🔇" : "🔊";
+    });
+  </script>
+</body>
+</html>
