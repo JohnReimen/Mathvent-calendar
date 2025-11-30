@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mathvent Calendar</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --page-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+      --door-border: rgba(255, 255, 255, 0.8);
+      --door-border-hover: #ffffff;
+      --door-bg: rgba(0, 0, 0, 0.15);
+      --door-bg-hover: rgba(0, 0, 0, 0.35);
+      --transition-fast: 0.3s ease;
+      --transition-slow: 0.5s ease;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at top, #1c2541, #0b1020 55%, #020308);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+      animation: bodyFadeIn 1.2s ease both;
+    }
+
+    @keyframes bodyFadeIn {
+      from { opacity: 0; transform: scale(0.99); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+
+    .page {
+      position: relative;
+      width: min(90vw, 70vh * 210 / 297); /* A4 ratio on screen */
+      aspect-ratio: 210 / 297;
+      background-image: url("santa_math_comic.jpg"); /* your background */
+      background-size: cover;
+      background-position: center;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: var(--page-shadow);
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: stretch;
+      color: #fff;
+      backdrop-filter: blur(0.5px);
+    }
+
+    .header {
+      text-align: center;
+      padding-bottom: 0.5rem;
+      text-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .header h1 {
+      margin: 0.1rem 0 0.2rem;
+      font-size: clamp(1.2rem, 2.5vw, 1.6rem);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      grid-template-rows: repeat(4, 1fr);
+      gap: 0.35rem;
+      position: relative; /* important for overlay */
+    }
+
+    /* Each grid cell */
+    .door-slot {
+      position: relative;
+      perspective: 800px; /* for 3D flap */
+      background: transparent;
+    }
+
+    /* When a door is active, make the whole cell white */
+    .door-slot.active {
+      background: #ffffff;
+    }
+
+    /* The flap itself */
+    .door {
+      position: absolute;
+      inset: 0;
+      border: 2px solid var(--door-border);
+      border-radius: 4px;
+      background: var(--door-bg);
+      cursor: pointer;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition:
+        transform var(--transition-slow),
+        box-shadow var(--transition-slow),
+        border-color var(--transition-fast),
+        background var(--transition-fast),
+        opacity 0.25s ease;
+      backdrop-filter: blur(1px);
+      transform-style: preserve-3d;
+      transform-origin: left center; /* default hinge on left */
+      z-index: 2; /* flap above text */
+    }
+
+    .door.hinge-right {
+      transform-origin: right center;
+    }
+
+    .door:hover {
+      border-color: var(--door-border-hover);
+      background: var(--door-bg-hover);
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+    }
+
+    .door-number {
+      font-size: clamp(0.9rem, 2.2vw, 1.1rem);
+      font-weight: 700;
+      text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+      z-index: 1;
+      transition: opacity var(--transition-fast);
+    }
+
+    /* Flap open states (Advent-style) */
+    .door.open.hinge-left {
+      transform: rotateY(-120deg);
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.7);
+    }
+
+    .door.open.hinge-right {
+      transform: rotateY(120deg);
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.7);
+    }
+
+    .door.open .door-number {
+      opacity: 0;
+    }
+
+    /* Small box under the door: Christmas emoji */
+    .question-content {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.3rem 0.25rem;
+      text-align: center;
+      font-size: 1.1rem;
+      line-height: 1.3;
+      color: #000;
+      background: transparent;
+      z-index: 0;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .door-slot.active .question-content {
+      background: #ffffff;
+      border: none; /* pure white card under the door */
+    }
+
+    .emoji-behind {
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .door-slot.active .emoji-behind {
+      opacity: 1;
+    }
+
+    .close-question-small {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: rgba(0,0,0,0.65);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 10px;
+      height: 10px;
+      font-size: 6px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 3;
+    }
+    .door-slot.active .close-question-small {
+      display: flex;
+    }
+
+    /* FRONT PAGE STYLES */
+    .front-page {
+      position: fixed;
+      inset: 0;
+      background-image: url("School.jpg");
+      background-size: cover;
+      background-position: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      color: white;
+      text-align: center;
+    }
+
+    #start-button {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      padding: 0.8rem 1.8rem;
+      font-size: 1.1rem;
+      background: green;
+      color: #ffffff;
+      border: 2px solid #ffffff;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 700;
+      box-shadow: none;
+      transition:
+        transform 0.2s ease,
+        background 0.2s ease,
+        border-color 0.2s ease;
+    }
+    #start-button:hover {
+      transform: scale(1.05);
+      background: rgba(0, 0, 0, 0.25);
+      border-color: #ffffff;
+    }
+
+    /* 🔊 mute button on second page */
+    .mute-button {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      padding: 0.2rem 0.45rem;
+      font-size: 0.75rem;
+      background: rgba(0, 0, 0, 0.4);
+      color: #ffffff;
+      border: 2px solid #ffffff;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 700;
+      box-shadow: none;
+      transition:
+        transform 0.2s ease,
+        background 0.2s ease,
+        border-color 0.2s ease;
+      z-index: 10;
+    }
+
+    .mute-button:hover {
+      transform: scale(1.05);
+      background: rgba(0, 0, 0, 0.65);
+      border-color: #ffffff;
+    }
+
+    /* BIG QUESTION PANEL (position depends on row) */
+    .question-panel {
+      position: absolute;
+      left: 1rem;
+      right: 1rem;
+      background: #ffffff;
+      color: #000000;
+      border-radius: 12px;
+      border: 2px solid #dddddd;
+      padding: 1rem 1.2rem;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      z-index: 5;
+      overflow-y: auto;
+    }
+
+    /* lower part of calendar */
+    .question-panel.bottom-panel {
+      bottom: 1rem;
+      top: auto;
+    }
+
+    /* upper part of calendar */
+    .question-panel.top-panel {
+      top: 1rem;
+      bottom: auto;
+    }
+
+    .question-panel.active {
+      display: flex;
+    }
+
+    #question-panel-text {
+      font-size: clamp(0.8rem, 1.5vw, 1rem);
+      line-height: 1.5;
+      word-wrap: break-word;
+      word-break: break-word;
+      max-width: 100%;
+      white-space: pre-line;
+    }
+
+    #question-panel-close {
+      align-self: flex-end;
+      margin-bottom: 0.5rem;
+      background: rgba(0,0,0,0.75);
+      color: #ffffff;
+      border: none;
+      border-radius: 999px;
+      padding: 0.2rem 0.6rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    @media (max-width: 480px) {
+      .page {
+        padding: 0.7rem;
+      }
+      .grid {
+        gap: 0.25rem;
+      }
+      .question-panel {
+        left: 0.7rem;
+        right: 0.7rem;
+        padding: 0.7rem 0.8rem;
+      }
+      #question-panel-text {
+        font-size: 0.85rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- BACKGROUND MUSIC (started when pressing front-page button) -->
+  <audio id="bg-music" src="we-wish-you-a-merry-christmas-168945.mp3" loop></audio>
+
+  <!-- FRONT PAGE OVERLAY -->
+  <div class="front-page" id="front-page">
+    <button id="start-button">Enter Santa's school for smart elves</button>
+  </div>
+
+  <!-- MAIN CALENDAR PAGE -->
+  <div class="page" id="page">
+    <!-- 🔊 MUTE BUTTON ONLY ON SECOND PAGE -->
+    <button id="mute-button" class="mute-button">🔊</button>
+
+    <div class="header">
+      <h1>Mathvent Calendar</h1>
+    </div>
+
+    <div class="grid" id="grid">
+      <!-- 24 doors → each in a .door-slot (flap + emoji behind) -->
+
+      <div class="door-slot">
+        <div class="door" data-index="0">
+          <span class="door-number">7</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="7">
+          <span class="door-number">14</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="14">
+          <span class="door-number">22</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="22">
+          <span class="door-number">3</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="3">
+          <span class="door-number">18</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="18">
+          <span class="door-number">11</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="11">
+          <span class="door-number">1</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="1">
+          <span class="door-number">24</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="24">
+          <span class="door-number">6</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="6">
+          <span class="door-number">17</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="17">
+          <span class="door-number">9</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="9">
+          <span class="door-number">20</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="20">
+          <span class="door-number">13</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="13">
+          <span class="door-number">2</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="2">
+          <span class="door-number">15</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="15">
+          <span class="door-number">8</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="8">
+          <span class="door-number">4</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="4">
+          <span class="door-number">23</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="23">
+          <span class="door-number">5</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="5">
+          <span class="door-number">12</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="12">
+          <span class="door-number">19</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="19">
+          <span class="door-number">10</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="10">
+          <span class="door-number">21</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+
+      <div class="door-slot">
+        <div class="door" data-index="21">
+          <span class="door-number">16</span>
+        </div>
+        <div class="question-content">
+          <button class="close-question-small">✕</button>
+          <span class="emoji-behind"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- BIG QUESTION PANEL -->
+    <div id="question-panel" class="question-panel bottom-panel">
+      <button id="question-panel-close">✕ Close</button>
+      <div id="question-panel-text"></div>
+    </div>
+
+  </div>
+
+  <script>
+    // 👉 EDIT YOUR QUESTIONS HERE
+    const questions = [
+      "Santa is getting dressed in the dark, and his elves mixed up all his cozy Christmas socks. \n \nHe has 30 red socks, 20 white socks, and 10 blue socks. \n \nSanta reaches into the drawer without looking. \n \nHow many socks must he pull out to be absolutely sure he gets at least one matching Christmas pair?",
+      "Day 14 – Question text goes here.",
+      "Day 22 – Question text goes here.",
+      "In Santa’s workshop, the elves baked 529 Christmas cookies. \n \nEach elf baked a number of cookies equal to the number of elves in the workshop. \n \nHow many elves have been baking cookies?",
+      "Day 18 – Question text goes here.",
+      "Day 11 – Question text goes here.",
+      "At the North Pole, one-third of the elves spend their days looking after the reindeer. Half of the remaining elves work in Santa’s workshop, making toys. The other 60 elves read and sort the letters sent by children around the world. \n \nHow many elves live at the North Pole altogether? ",
+      "Day 24 – Question text goes here.",
+      "In the elves’ cantine, the milk tap fills the cauldron at 15 litres per minute, and the liquid chocolate tap adds 10 litres per minute. \n \nBut there is a leak in the cauldron that lets 12 litres per minute escape. \n \nThe cauldron can hold 520 litres in total. \nSanta turns on both taps to make hot chocolate but forgets to fix the leak. \nHe needs the cauldron to be full to have enough hot chocolate for all his elves. \n \nAfter how much time can he call them in?",
+      "Day 17 – Question text goes here.",
+      "Day 9 – Question text goes here.",
+      "Day 20 – Question text goes here.",
+      "Day 13 – Question text goes here.",
+      "Seven bags of toys, each filled to two-thirds of their capacity, are prepared at the North Pole. When Santa reaches the last Mensa member, he has taken out a quarter of the toys from each bag. \n \nCan the remaining three-quarters of the toys be packed into just three bags?",
+      "Day 15 – Question text goes here.",
+      "Santa's magic rectangular belt shrinks every time he fulfills a wish: each time, its length becomes 1/2 and its width becomes 1/3 of what it was before. \n \nAfter three fulfilled wishes, the belt’s surface area is now 4 cm². \n \nOriginally, the belt was 9 cm wide. \n \nWhat was the original length of Santa’s magic belt?",
+      "Santa has forgotten the code to his workshop safe.\n \nHe only remembers that the code is the 4th number in this sequence: \n \n24, 120, 720, ???? \n \nCan you help Santa?",
+      "Day 23 – Question text goes here.",
+      "Santa leaves the North Pole at 15:00 on his sleigh, flying at 240 km/h. \n \nOne hour later, the elves notice he has forgotten to take the bag with the presents for the Mensa members who have all been very good this year. \n \nThey immediately take off on their own sleigh to bring the bag to him, racing at 360 km/h.\n \nWhen will the elves’ sleigh catch up to Santa’s?",
+      "Day 12 – Question text goes here.",
+      "Day 19 – Question text goes here.",
+      "Day 10 – Question text goes here.",
+      "Day 21 – Question text goes here.",
+      "Day 16 – Question text goes here."
+    ];
+
+    const page        = document.getElementById("page");
+    const doors       = document.querySelectorAll(".door");
+    const bgMusic     = document.getElementById("bg-music");
+    const frontPage   = document.getElementById("front-page");
+    const startButton = document.getElementById("start-button");
+    const muteButton  = document.getElementById("mute-button");
+
+    const questionPanel      = document.getElementById("question-panel");
+    const questionPanelText  = document.getElementById("question-panel-text");
+    const questionPanelClose = document.getElementById("question-panel-close");
+
+    let openDoor       = null;
+    let activeSlot     = null;
+    let isMuted        = false;
+    let panelTimeoutId = null;  // for delayed showing
+
+    // 🎄 Random Christmas emojis
+    const christmasEmojis = [
+      "🎄","🎁","⭐","❄️","⛄","🔔","🕯️","🍪","🧦","🦌","🎀","🍬"
+    ];
+
+    // Assign emojis behind doors + set hinge side
+    doors.forEach((door, index) => {
+      const slot = door.parentElement;
+      const emojiSpan = slot.querySelector(".emoji-behind");
+
+      if (emojiSpan) {
+        const dayText = slot.querySelector(".door-number")?.textContent.trim();
+        // Day 6 and Day 24 → always present emoji 🎁
+        if (dayText === "6" || dayText === "24") {
+          emojiSpan.textContent = "🎁";
+        } else {
+          const randomIcon = christmasEmojis[Math.floor(Math.random() * christmasEmojis.length)];
+          emojiSpan.textContent = randomIcon;
+        }
+      }
+
+      const col = index % 6;
+      if (col >= 3) door.classList.add("hinge-right");
+      else          door.classList.add("hinge-left");
+    });
+
+    // Door click → open flap, then (after delay) show big panel with question text
+    doors.forEach((door, index) => {
+      door.addEventListener("click", () => {
+        const slot = door.parentElement;
+
+        // Cancel any pending show
+        if (panelTimeoutId !== null) {
+          clearTimeout(panelTimeoutId);
+          panelTimeoutId = null;
+        }
+
+        // Close previous door/slot
+        if (openDoor && openDoor !== door) {
+          openDoor.classList.remove("open");
+        }
+        if (activeSlot && activeSlot !== slot) {
+          activeSlot.classList.remove("active");
+        }
+
+        openDoor   = door;
+        activeSlot = slot;
+
+        // Activate this cell & open the flap
+        slot.classList.add("active");
+        door.classList.add("open");
+
+        // Big panel question text from array
+        const fullText = questions[index] || ("Question " + (index + 1));
+        questionPanelText.textContent = fullText;
+
+        // Decide where to place the panel:
+        // rows 0–1 (upper half) → bottom; rows 2–3 (lower half) → top
+        const row = Math.floor(index / 6); // 0..3
+        questionPanel.classList.remove("top-panel", "bottom-panel");
+        if (row >= 2) {
+          // lower two rows → show question in upper part
+          questionPanel.classList.add("top-panel");
+        } else {
+          // upper two rows → show question in lower part
+          questionPanel.classList.add("bottom-panel");
+        }
+
+        // Delay so user sees the flap opening
+        panelTimeoutId = setTimeout(() => {
+          questionPanel.classList.add("active");
+          panelTimeoutId = null;
+        }, 300); // 300 ms delay
+      });
+    });
+
+    function closeQuestionPanel() {
+      // Hide the big panel
+      questionPanel.classList.remove("active");
+
+      // Cancel any pending show
+      if (panelTimeoutId !== null) {
+        clearTimeout(panelTimeoutId);
+        panelTimeoutId = null;
+      }
+
+      // Reset doors and slots
+      if (openDoor) {
+        openDoor.classList.remove("open");
+        openDoor = null;
+      }
+      if (activeSlot) {
+        activeSlot.classList.remove("active");
+        activeSlot = null;
+      }
+    }
+
+    // Big panel close
+    questionPanelClose.addEventListener("click", (event) => {
+      event.stopPropagation();
+      closeQuestionPanel();
+    });
+
+    // Small X under the door also closes everything
+    document.querySelectorAll(".close-question-small").forEach(btn => {
+      btn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        closeQuestionPanel();
+      });
+    });
+
+    // Start button: hide front page + start music
+    startButton.addEventListener("click", () => {
+      frontPage.style.display = "none";
+      if (bgMusic) {
+        bgMusic.play().catch(() => {});
+      }
+    });
+
+    // Mute button
+    muteButton.addEventListener("click", () => {
+      isMuted = !isMuted;
+      bgMusic.muted = isMuted;
+      muteButton.textContent = isMuted ? "🔇" : "🔊";
+    });
+  </script>
+</body>
+</html>
